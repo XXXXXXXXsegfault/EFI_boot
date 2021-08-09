@@ -1,0 +1,83 @@
+EFI_boot -- A UEFI bootloader for Linux
+
+# Compiling
+
+In order to compile EFI_boot, following tools are required:
+
+gcc
+binutils
+make
+
+Type "make" in source directory to start compiling.
+
+# Installing
+
+1. Create at least an EFI partition and a boot partition on your disk.
+
+sgdisk <YOUR DISK> -n 1:2048:526335 -c "EFI System Partition" -t 1:ef00 -n 2:526336:1050623 -c "boot"
+mkfs.fat <YOUR_DISK_PART_1>
+mkfs.ext2 <YOUR_DISK_PART_2> # NOT ext4!
+
+2. Create a 16-byte ID to identify boot partition.
+
+dd if=/dev/urandom of=bootid count=1 bs=16
+
+3. Copy bootx64.efi and bootid to EFI partition.
+
+mount <YOUR_DISK_PART_1> /mnt
+mkdir -p /mnt/EFI/BOOT
+cp bootx64.efi /mnt/EFI/BOOT/bootx64.efi
+cp bootid /mnt/EFI/BOOT/bootid
+umount /mnt
+
+4. Write bootid to start of boot partition.
+
+dd if=bootid of=<YOUR_DISK_PART_2>
+
+5. Mount boot partition.
+
+mount <YOUR_DISK_PART_2> /mnt
+
+6. Copy Linux kernel (and if needed, initrd) to boot partition.
+
+cp <YOUR_KERNEL> /mnt
+cp <YOUR_INITRD> /mnt
+
+7. Create boot configuration (see below) file in boot partition.
+
+8. Unmount boot partition.
+
+umount /mnt
+
+# Boot Configuration
+
+The file containing boot configuration is placed at root of boot partition, and is named "boot.conf".
+Boot configuration consists of boot commands.
+Boot commands must be placed in one line, and cannot be longer than 2047 bytes.
+Boot commands start with a command string, then one space character, then command argument.
+Available commands:
+ENTRY -- Beginning of an entry (and end of previous entry). Command argument specifies name of this entry.
+LINUX -- Specify path to Linux kernel.
+INITRD -- Specify path to initrd. Can only be used after LINUX command.
+CMDLINE -- Specify kernel command line. Can only be used after LINUX command.
+Any other commands are ignored.
+
+Following is an example of boot configuration:
+ENTRY Linux 5.10.56
+LINUX /vmlinuz-5.10.56
+INITRD /rootfs-5.10.56
+CMDLINE root=/dev/ram0 rw console=tty0 quiet init=/init
+ENTRY Linux 5.4.124
+LINUX /vmlinuz-5.4.124
+INITRD /rootfs-5.4.124
+CMDLINE root=/dev/ram0 rw console=tty0 quiet init=/init
+
+# Background
+
+It is possible to use custom background in boot menu. background image file is placed at root of boot partition, and is named "background.bin".
+The format of background image is very simple:
+Offset  Size    Description
+0       2       Width of image.
+2       2       Height of image.
+4      	N       Bitmap data, 32-bit XRGB format.
+If background image file not found or size of background image file is not equal to Width*Height*4+4, it will use black background.
