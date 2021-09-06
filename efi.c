@@ -83,6 +83,11 @@ struct EFI_boot_services
 	void *set_mem;
 	void *create_event_ex;
 };
+struct EFI_config_table
+{
+	unsigned int guid[4];
+	void *addr;
+};
 struct EFI_system_table
 {
 	unsigned int header[6];
@@ -97,7 +102,7 @@ struct EFI_system_table
 	struct EFI_runtime_services *runtime_services;
 	struct EFI_boot_services *boot_services;
 	unsigned long long int n_entries;
-	void *config_table;
+	struct EFI_config_table *config_table;
 };
 long long int _eficall(void *handler,int count,long long int *args);
 asm("_eficall:");

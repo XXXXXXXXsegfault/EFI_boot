@@ -5,8 +5,6 @@ asm("mov %rdx,%rsi");
 asm("call _main");
 asm("ret");
 void *image_handle_this;
-#pragma GCC push_options
-#pragma GCC optimize("O1")
 #include "efi.c"
 #include "memset.c"
 #include "memcpy.c"
@@ -22,9 +20,11 @@ struct file_image
 	unsigned long long int size;
 	char *image;
 };
+unsigned int *bg_resized;
 struct file_image config;
 struct file_image bg;
-unsigned int bg_read(unsigned int x,unsigned int y)
+void debug_p_i(unsigned long long int a,int x,int y);
+unsigned int bg_decode(unsigned int x,unsigned int y)
 {
 	unsigned short int *bginfo=(void *)bg.image;
 	unsigned int *bg_addr=(void *)(bginfo+2);
@@ -38,9 +38,11 @@ unsigned int bg_read(unsigned int x,unsigned int y)
 	int x2=x%sinfo[0],y2=y%sinfo[1];
 	unsigned int c[4];
 	unsigned int off=y1*bginfo[0]+x1;
-	int r[4],r1[2],r2;
-	int g[4],g1[2],g2;
-	int b[4],b1[2],b2;
+	int r[4],r1[2];
+	int g[4],g1[2];
+	int b[4],b1[2];
+	int r2,g2,b2;
+	unsigned int result;
 
 	c[0]=bg_addr[off];
 	if(x1+1<bginfo[0])
@@ -85,7 +87,28 @@ unsigned int bg_read(unsigned int x,unsigned int y)
 	r2=r1[0]+(r1[1]-r1[0])*y2/(int)sinfo[1];
 	g2=g1[0]+(g1[1]-g1[0])*y2/(int)sinfo[1];
 	b2=b1[0]+(b1[1]-b1[0])*y2/(int)sinfo[1];
-	return (r2&0xff)<<16|(g2&0xff)<<8|b2&0xff;
+	result=r2&0xff;
+	result=result<<8|g2&0xff;
+	result=result<<8|b2&0xff;
+	return result;
+}
+void bg_resize(void)
+{
+	int x,y=0;
+	while(y<sinfo[1])
+	{
+		x=0;
+		while(x<sinfo[0])
+		{
+			bg_resized[y*line_length/4+x]=bg_decode(x,y);
+			x++;
+		}
+		y++;
+	}
+}
+unsigned int bg_read(int x,int y)
+{
+	return bg_resized[y*line_length/4+x];
 }
 void p_char(char c,int x,int y,char m)
 {
@@ -166,17 +189,7 @@ void debug_p_mem_map(unsigned long long int addr)
 }
 void paint_bg(void)
 {
-	int x,y=0;
-	while(y<sinfo[1])
-	{
-		x=0;
-		while(x<sinfo[0])
-		{
-			paint_pixel(x,y,bg_read(x,y));
-			x++;
-		}
-		y++;
-	}
+	memcpy(video_buf,bg_resized,line_length*sinfo[1]);
 }
 unsigned int config_read_line(unsigned int off,unsigned int *size)
 {
@@ -255,10 +268,12 @@ unsigned int getch(struct EFI_system_table *table)
 int parse_config(struct EFI_system_table *table,unsigned int off)
 {
 	char type=0;
-	unsigned int off1=off,l;
+	unsigned int off1=off,l,x;
 	struct file_image kernel={0},initrd={0};
 	static char config_buf2[2048];
 	static char linux_cmdline[2048];
+	unsigned long long int acpi_addr;
+	char *str="0123456789abcdef";
 	if(off==0)
 	{
 		return 1;
@@ -292,14 +307,27 @@ int parse_config(struct EFI_system_table *table,unsigned int off)
 		}
 		else if(l>8&&!memcmp(config.image+off1,"CMDLINE ",8))
 		{
+			acpi_addr=locate_acpi(table);
 			if(type==1)
 			{
 				l-=8;
-				if(l>2047)
+				if(l>2018)
 				{
-					l=2047;
+					l=2018;
 				}
 				memcpy(linux_cmdline,config.image+off1+8,l);
+				if(acpi_addr)
+				{
+					memcpy(linux_cmdline+l," acpi_rsdp=0x0000000000000000",30);
+					x=l+28;
+					while(acpi_addr)
+					{
+						linux_cmdline[x]=str[acpi_addr&0xf];
+						acpi_addr>>=4;
+						x--;
+					}
+					l+=29;
+				}
 				linux_cmdline[l]=0;
 			}
 		}
@@ -366,11 +394,19 @@ int _main(void *handle,struct EFI_system_table *table)
 	{
 		return -1;
 	}
+	if((bg_resized=palloc(table,line_length*sinfo[1]+4095>>12))==0)
+	{
+		return -1;
+	}
 	if(ext2_parse_path("/background.bin"))
 	{
 		bg.image=ext2_load(table,&bg.size);
 	}
+	asm("cli");
+	bg_resize();
+	asm("sti");
 	config_n=sinfo[1]/16;
+
 	p_all();
 	while(1)
 	{
@@ -412,4 +448,3 @@ int _main(void *handle,struct EFI_system_table *table)
 	}
 }
 
-#pragma GCC pop_options

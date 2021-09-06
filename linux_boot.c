@@ -1,3 +1,24 @@
+unsigned long long int locate_acpi(struct EFI_system_table *table)
+{
+	int x=0;
+	long long int status;
+	unsigned int guid[4]={0xeb9d2d30,0x11d32d88,0x9000169a,0x4dc13f27};
+	unsigned int guid2[4]={0x8868e871,0x11d3e4f1,0x800022bc,0x81883cc7};
+	while(x<table->n_entries)
+	{
+		if(!memcmp(table->config_table[x].guid,guid,16))
+		{
+			return (unsigned long long int)table->config_table[x].addr;
+		}
+		if(!memcmp(table->config_table[x].guid,guid2,16))
+		{
+			return (unsigned long long int)table->config_table[x].addr;
+		}
+		x++;
+	}
+	return 0;
+}
+
 struct linux_screen_info
 {
 	unsigned char orig_x;
@@ -119,7 +140,6 @@ int fill_e820(struct EFI_system_table *table,struct linux_boot_params *boot_para
 	}
 	nentries=size/desc_size;
 	info=meminfo;
-	boot_params->n_e820=nentries;
 	while(x<nentries)
 	{
 		boot_params->_e820_table[x].addr=info->paddr;
@@ -130,8 +150,6 @@ int fill_e820(struct EFI_system_table *table,struct linux_boot_params *boot_para
 			case 2:
 			case 3:
 			case 4:
-			case 5:
-			case 6:
 			case 7:
 			boot_params->_e820_table[x].type=1;
 			break;
@@ -144,15 +162,13 @@ int fill_e820(struct EFI_system_table *table,struct linux_boot_params *boot_para
 			case 14:
 			boot_params->_e820_table[x].type=7;
 			break;
-			case 8:
-			boot_params->_e820_table[x].type=5;
-			break;
 			default:
 			boot_params->_e820_table[x].type=2;
 		}
 		info=(void *)((char *)info+desc_size);
 		x++;
 	}
+	boot_params->n_e820=nentries;
 	eficall(table->boot_services->exit_boot_services,2,status,(i64)image_handle_this,key);
 	if(status<0)
 	{
