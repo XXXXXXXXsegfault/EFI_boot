@@ -1,6 +1,7 @@
 #ifndef _My_OS_memcpy_
 #define _My_OS_memcpy_
 void *memcpy(void *dst,void *src,unsigned long long int size);
+asm(".text");
 asm("memcpy:");
 asm("_memcpy_X2:");
 asm("sub $64,%rdx");

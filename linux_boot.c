@@ -67,7 +67,9 @@ struct _e820_entry
 struct linux_boot_params
 {
 	struct linux_screen_info sinfo;
-	char unused1[0x80];
+	char unused1[0x30];
+	unsigned long long acpi_addr;
+	char unused10[0x48];
 	unsigned int ext_ramdisk_image;
 	unsigned int ext_ramdisk_size;
 	unsigned int ext_cmdline; 
@@ -94,14 +96,14 @@ struct linux_boot_params
 }__attribute__((packed));
 
 unsigned long long int GDT[]={0,0,
-0x002f9a000000ffff,
-0x002f92000000ffff};
+0x00af9a000000ffff,
+0x00af92000000ffff};
 struct _GDTR
 {
 	unsigned short int len;
 	void *pos;
 } __attribute__((packed));
-struct _GDTR GDTR={sizeof(GDT)-1,GDT};
+struct _GDTR GDTR={sizeof(GDT)-1};
 
 struct EFI_md
 {
@@ -178,11 +180,11 @@ int fill_e820(struct EFI_system_table *table,struct linux_boot_params *boot_para
 	return 0;
 }
 void do_boot_linux(void *image,void *params);
-void boot_linux(struct EFI_system_table *table,struct file_image *kernel,struct file_image *initrd,char *cmdline)
+void boot_linux(struct EFI_system_table *table,struct file_image *kernel,struct file_image *initrd,char *cmdline,unsigned long long acpi_addr)
 {
 	unsigned int end_header=kernel->image[0x201];
 	struct linux_boot_params *boot_params;
-	void *linux_buf;
+	char *linux_buf;
 	unsigned long long int map_key;
 	if((boot_params=palloc(table,1))==0)
 	{
@@ -193,7 +195,7 @@ void boot_linux(struct EFI_system_table *table,struct file_image *kernel,struct 
 	boot_params->sinfo.orig_video_cols=0x50;
 	boot_params->sinfo.orig_video_ega_bx=0x03;
 	boot_params->sinfo.orig_video_lines=0x19;
-	boot_params->sinfo.orig_video_isvga=0x23;
+	boot_params->sinfo.orig_video_isvga=0x70;
 	boot_params->sinfo.orig_video_points=0x10;
 	boot_params->sinfo.width=sinfo[0];
 	boot_params->sinfo.height=sinfo[1];
@@ -225,10 +227,23 @@ void boot_linux(struct EFI_system_table *table,struct file_image *kernel,struct 
 		boot_params->ramdisk_size=initrd->size;
 		boot_params->ext_ramdisk_size=initrd->size>>32;
 	}
+	boot_params->acpi_addr=acpi_addr;
 	boot_params->cmdline=(i64)cmdline;
 	boot_params->ext_cmdline=(i64)cmdline>>32;
 	boot_params->loader_type=0xff;
-	boot_params->load_flags|=0x20;
+	boot_params->load_flags|=0x80;
+	boot_params->load_flags&=~0x20;
+	int offset;
+	offset=kernel->image[0x1f1];
+	if(offset==0)
+	{
+		offset=4;
+	}
+	offset=(offset+1)*0x200;
+	if(kernel->size<0x200||kernel->size<=offset)
+	{
+		goto Err;
+	}
 	if((linux_buf=palloc(table,0x30000))==0)
 	{
 		goto Err;
@@ -237,9 +252,13 @@ void boot_linux(struct EFI_system_table *table,struct file_image *kernel,struct 
 	{
 		goto Err2;
 	}
+	char *linux_buf2;
+	linux_buf2=linux_buf+(-(i64)linux_buf&0xffffff);
 	memset(video_mem,0,(int)sinfo[1]*line_length);
-	memcpy(linux_buf,kernel->image,kernel->size);
-	do_boot_linux(linux_buf,boot_params);
+	memcpy(linux_buf2,kernel->image+offset,kernel->size-offset);
+	GDTR.pos=GDT;
+	asm("cli");
+	do_boot_linux(linux_buf2+0x200,boot_params);
 Err2:
 	prelease(table,linux_buf,0x30000);
 Err:
@@ -247,24 +266,16 @@ Err:
 }
 asm("do_boot_linux:");
 asm("pushq $0x10");
-asm("pushq $do_boot_linux_X1");
-asm("lgdt GDTR");
+asm("lea do_boot_linux_X1(%rip),%rax");
+asm("push %rax");
+asm("lgdt GDTR(%rip)");
 asm("mov $0x18,%ax");
 asm("mov %ax,%ds");
 asm("mov %ax,%es");
 asm("mov %ax,%fs");
 asm("mov %ax,%gs");
 asm("mov %ax,%ss");
-asm("cli");
 asm("lretq");
 asm("do_boot_linux_X1:");
-asm("movzbl 0x1f1(%rdi),%eax");
-asm("test %al,%al");
-asm("jne do_boot_linux_X2");
-asm("mov $4,%al");
-asm("do_boot_linux_X2:");
-asm("inc %eax");
-asm("inc %eax");
-asm("shl $9,%eax");
-asm("add %rdi,%rax");
-asm("jmp *%rax");
+//asm("int3");
+asm("jmp *%rdi");

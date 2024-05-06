@@ -95,12 +95,11 @@ int graphics_init(struct EFI_system_table *table)
 	{
 		return -1;
 	}
-	memset(video_mem,255,video_buf_size);
 	graphics_current_mode=gop->mode;
 	video_mem=graphics_current_mode->addr;
-	video_buf_size=graphics_current_mode->size;
-	eficall(table->boot_services->alloc_pages,4,status,0,2,video_buf_size+4095>>12,(i64)&video_buf);
-	if(status<0||video_buf==0)
+	video_buf_size=graphics_current_mode->info->vres*graphics_current_mode->info->line_pixels*4;
+	video_buf=palloc(table,video_buf_size+4095>>12);
+	if(video_buf==0)
 	{
 		return -1;
 	}

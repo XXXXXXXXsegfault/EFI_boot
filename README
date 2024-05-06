@@ -2,27 +2,27 @@ EFI_boot -- A UEFI bootloader for Linux
 
 # Compiling
 
-In order to compile EFI_boot, following tools are required:
+Compiling this bootloader requires these dependencies:
 
 gcc
-binutils
+binutils (PE file format support needed)
 make
 
-Type "make" in source directory to start compiling.
+Enter "make" to compile.
 
 # Installing
 
-1. Create at least an EFI partition and a boot partition on your disk.
+1. Create an EFI partition and a boot partition on your disk.
 
 sgdisk <YOUR DISK> -n 1:2048:526335 -c "EFI System Partition" -t 1:ef00 -n 2:526336:1050623 -c "boot"
 mkfs.fat <YOUR_DISK_PART_1>
 mkfs.ext2 <YOUR_DISK_PART_2> # NOT ext4!
 
-2. Create a 16-byte ID to identify boot partition.
+2. Create a 16-byte ID to identify the boot partition.
 
 dd if=/dev/urandom of=bootid count=1 bs=16
 
-3. Copy bootx64.efi and bootid to EFI partition.
+3. Copy bootx64.efi and bootid to the EFI partition.
 
 mount <YOUR_DISK_PART_1> /mnt
 mkdir -p /mnt/EFI/BOOT
@@ -30,39 +30,38 @@ cp bootx64.efi /mnt/EFI/BOOT/bootx64.efi
 cp bootid /mnt/EFI/BOOT/bootid
 umount /mnt
 
-4. Write bootid to start of boot partition.
+4. Write bootid to the start of the boot partition.
 
 dd if=bootid of=<YOUR_DISK_PART_2>
 
-5. Mount boot partition.
+5. Mount the boot partition.
 
 mount <YOUR_DISK_PART_2> /mnt
 
-6. Copy Linux kernel (and if needed, initrd) to boot partition.
+6. Copy the Linux kernel (and if needed, initrd) to the boot partition.
 
 cp <YOUR_KERNEL> /mnt
 cp <YOUR_INITRD> /mnt
 
-7. Create boot configuration (see below) file in boot partition.
+7. Create a boot configuration (see below) file in the boot partition.
 
-8. Unmount boot partition.
+8. Unmount the boot partition.
 
 umount /mnt
 
 # Boot Configuration
 
-The file containing boot configuration is placed at root of boot partition, and is named "boot.conf".
-Boot configuration consists of boot commands.
-Boot commands must be placed in one line, and cannot be longer than 2047 bytes.
-Boot commands start with a command string, then one space character, then command argument.
+The boot configuration file is placed at the root of the boot partition, and is named "boot.conf".
+The boot configuration file consists of multiple boot commands.
+Boot commands must be placed in single lines, and cannot be longer than 2047 bytes.
 Available commands:
-ENTRY -- Beginning of an entry (and end of previous entry). Command argument specifies name of this entry.
-LINUX -- Specify path to Linux kernel.
-INITRD -- Specify path to initrd. Can only be used after LINUX command.
-CMDLINE -- Specify kernel command line. Can only be used after LINUX command.
+ENTRY -- Beginning of an entry (and end of the previous entry).
+LINUX -- Specify the path to the Linux kernel.
+INITRD -- Specify the path to the initrd. Can only be used after the LINUX command.
+CMDLINE -- Specify the kernel command line. Can only be used after the LINUX command.
 Any other commands are ignored.
 
-Following is an example of boot configuration:
+Below is an example of a boot configuration:
 ENTRY Linux 5.10.56
 LINUX /vmlinuz-5.10.56
 INITRD /rootfs-5.10.56
@@ -74,10 +73,10 @@ CMDLINE root=/dev/ram0 rw console=tty0 quiet init=/init
 
 # Background
 
-It is possible to use custom background in boot menu. background image file is placed at root of boot partition, and is named "background.bin".
-The format of background image is very simple:
+It is possible to use a custom background in the boot menu. The background image file is placed at the root of the boot partition, and is named "background.bin".
+The format of the background image is very simple:
 Offset  Size    Description
-0       2       Width of image.
-2       2       Height of image.
-4      	N       Bitmap data, 32-bit XRGB format.
-If background image file not found or size of background image file is not equal to Width*Height*4+4, it will use black background.
+0       2       Width of the image.
+2       2       Height of the image.
+4      	N       Pixel data, 32-bit XRGB format.
+If the background image file does not exist or the size of the background image file is not equal to Width*Height*4+4, a black background will be used.

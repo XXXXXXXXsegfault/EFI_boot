@@ -1,6 +1,7 @@
 #ifndef _My_OS_memset_
 #define _My_OS_memset_
 void *memset(void *ptr,int value,unsigned long long int size);
+asm(".text");
 asm("memset:");
 asm("push %rdi");
 asm("push %rsi");

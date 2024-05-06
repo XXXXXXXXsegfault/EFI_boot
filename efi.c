@@ -105,6 +105,7 @@ struct EFI_system_table
 	struct EFI_config_table *config_table;
 };
 long long int _eficall(void *handler,int count,long long int *args);
+asm(".text");
 asm("_eficall:");
 asm("push %rcx");
 asm("push %rdx");
@@ -155,8 +156,8 @@ asm("pop %rcx");
 asm("ret");
 #define eficall(handler,n,status,...)  \
 {\
-	long long int array[n]={__VA_ARGS__}; \
-	status=_eficall(handler,n,array); \
+	long long int array[(n)+5&0xfffffffe]={__VA_ARGS__}; \
+	status=_eficall(handler,(n)+5&0xfffffffe,array); \
 }
 void efi_reboot(struct EFI_system_table *table)
 {

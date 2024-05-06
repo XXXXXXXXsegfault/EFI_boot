@@ -1,3 +1,4 @@
+asm(".text");
 asm(".globl _start");
 asm("_start:");
 asm("mov %rcx,%rdi");
@@ -9,11 +10,11 @@ void *image_handle_this;
 #include "memset.c"
 #include "memcpy.c"
 #include "memcmp.c"
+#include "palloc.c"
 #include "font.c"
 #include "graphics.c"
 #include "fs.c"
 #include "block.c"
-#include "palloc.c"
 #include "ext2_read.c"
 struct file_image
 {
@@ -307,7 +308,6 @@ int parse_config(struct EFI_system_table *table,unsigned int off)
 		}
 		else if(l>8&&!memcmp(config.image+off1,"CMDLINE ",8))
 		{
-			acpi_addr=locate_acpi(table);
 			if(type==1)
 			{
 				l-=8;
@@ -316,18 +316,6 @@ int parse_config(struct EFI_system_table *table,unsigned int off)
 					l=2018;
 				}
 				memcpy(linux_cmdline,config.image+off1+8,l);
-				if(acpi_addr)
-				{
-					memcpy(linux_cmdline+l," acpi_rsdp=0x0000000000000000",30);
-					x=l+28;
-					while(acpi_addr)
-					{
-						linux_cmdline[x]=str[acpi_addr&0xf];
-						acpi_addr>>=4;
-						x--;
-					}
-					l+=29;
-				}
 				linux_cmdline[l]=0;
 			}
 		}
@@ -352,7 +340,7 @@ int parse_config(struct EFI_system_table *table,unsigned int off)
 	}
 	switch(type)
 	{
-		case 1:boot_linux(table,&kernel,&initrd,linux_cmdline);
+		case 1:boot_linux(table,&kernel,&initrd,linux_cmdline,locate_acpi(table));
 		break;
 	}
 	if(kernel.image)
@@ -402,9 +390,7 @@ int _main(void *handle,struct EFI_system_table *table)
 	{
 		bg.image=ext2_load(table,&bg.size);
 	}
-	asm("cli");
 	bg_resize();
-	asm("sti");
 	config_n=sinfo[1]/16;
 
 	p_all();
